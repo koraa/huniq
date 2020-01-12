@@ -1,8 +1,9 @@
 extern crate clap;
 
-use std::{slice, clone::Clone};
-use std::collections::{HashSet, HashMap, hash_map};
+use std::collections::{HashSet, HashMap, hash_map, hash_map::DefaultHasher};
+use std::hash::{Hasher};
 use std::io::{stdin, BufRead, BufReader, stdout, Write, BufWriter};
+use std::slice;
 use clap::{Arg, App};
 use failure::Error;
 
@@ -27,13 +28,19 @@ fn count_cmd(delim: u8) -> Result<()> {
     Ok(())
 }
 
+fn hash<T: std::hash::Hash>(v: &T) -> u64 {
+    let mut s = DefaultHasher::new();
+    v.hash(&mut s);
+    s.finish()
+}
+
 fn uniq_cmd(delim: u8) -> Result<()> {
     let mut out = BufWriter::new(stdout());
-    let mut set = HashSet::<Vec<u8>>::new();
+    let mut set = HashSet::<u64>::new();
 
     for line in BufReader::new(stdin()).split(delim) {
         let line = line?;
-        if set.insert(line.clone()) {
+        if set.insert(hash(&line)) {
             out.write(&line)?;
             out.write(slice::from_ref(&delim))?;
         }
