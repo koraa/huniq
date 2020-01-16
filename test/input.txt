@@ -1,0 +1,6 @@
+hello
+foo
+hello
+hello
+bar
+bar
