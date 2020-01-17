@@ -1,6 +1,7 @@
 # huniq version 2
 
 Command line utility to remove duplicates from the given input.
+Note that huniq does not sort the input, it just removes duplicates.
 
 ```
 SYNOPSIS: huniq -h # Shows help
