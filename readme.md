@@ -1,4 +1,4 @@
-# huniq 2
+# huniq version 2
 
 Command line utility to remove duplicates from the given input.
 
@@ -37,7 +37,7 @@ Changes made in version 2:
 
 * The -d/-0 flags where added so you can specify custom delimiters
 * Completely rewritten in rust.
-* Version two was in the (admittedly very limited) between 1.4x 
+* Version two is (depending on which benchmark you look at below) between 1.25 and 3.6x faster than version 1
 
 ## Build
 
