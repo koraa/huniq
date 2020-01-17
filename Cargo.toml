@@ -12,4 +12,4 @@ keywords = ["cli", "uniq"]
 
 [dependencies]
 clap = "^2.33.0"
-failure = "^0.1.6"
+anyhow = "1.0"

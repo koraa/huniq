@@ -5,9 +5,7 @@ use std::hash::{Hasher};
 use std::io::{stdin, BufRead, BufReader, stdout, Write, BufWriter};
 use std::slice;
 use clap::{Arg, App};
-use failure::Error;
-
-type Result<T> = std::result::Result<T, Error>;
+use anyhow::Result;
 
 fn count_cmd(delim: u8) -> Result<()> {
     let mut set = HashMap::<Vec<u8>, u64>::new();
