@@ -19,7 +19,7 @@ $ echo -e "foo\nbar\nfoo\nbaz" | huniq -c
 2 foo
 ```
 
-`huniq` replaces `sort | uniq` and `huniq -c` replaces `sort | uniq -c`.
+`huniq` replaces `sort | uniq` (or `sort -u` with gnu sort) and `huniq -c` replaces `sort | uniq -c`.
 
 The order of the output is stable when in normal mode, but it is not stable when
 in -c/count mode.
@@ -33,7 +33,7 @@ $ cargo install huniq
 ## Motivation
 
 Sorting is slow. By using hash tables/hash sets instead of sorting
-the input huniq is generally faster than `sort -u` or `sort | uniq -c`.
+the input huniq is generally faster than `sort -u` or `sort | uniq -c` when testing with gnu sort/gnu uniq.
 
 ## Version History
 
