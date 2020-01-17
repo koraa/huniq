@@ -55,39 +55,80 @@ bash ./test.sh
 
 You can use `bash ./benchmark.sh` to execute the benchmarks. They will execute until you manually abort them (e.g. by pressing Ctrl-C).
 
-From my very limited benchmarking results, I found that the rust implementation is between 1-2x faster than the C++ implementation and between 5-10 times
-faster than the `uniq/sort` standard implementation.
+The benchmarks work by repeatedly feeding the implementations with data
+from /usr/share/dict/* and measuring memory usage and time needed to process
+the data with the unix `time` tool.
 
-Surprisingly, sort features the lowest memory usage. All three implementations' memory usage grow with the number of unique lines, and not the number
-of total lines, so sort probably manually optimizes for that. Sort's memory usage us about a third of the rust implementation…
-The difference in memory usage between the rust implementation and the C++ one is quite small; the C++ one uses around 10% less memory.
+For the `uniq` algorithm, the results are posted below: We can see that the
+rust implementation is the very fastest. It beats the C++ implementation by a factor
+of between 3.6 (for very few duplicates) and 1.7 (around 98% duplicates).
+The difference is even starker when compared to `sort -u`: huniq is between 12 and 50 times faster.
 
-The benchmark 
+Surprisingly, `uniq -u` was the most memory efficient. It beat both the rust and
+C++ implementation by a factor of between 2.7 and 3. The Rust implementation
+has a slightly worse memory footprint than the C++ one. It uses around 14%
+more memory.
+
+```
+repetitions  implementation  seconds  memory/kb
+1            rust               0.57      29648
+1            cpp                2.05      26092
+1            shell              8.62       9932
+2            rust               1.54      29616
+2            cpp                4.47      26060
+2            shell             23.99       9932
+5            rust               4.56      29512
+5            cpp                7.45      26116
+5            shell             50.88       9996
+10           rust              11.54      29512
+10           cpp               16.33      26144
+10           shell            101.04      10156
+50           rust              34.13      29632
+50           cpp               58.62      26112
+50           shell            421.27      10884
+```
+
+For the counting `huniq -c` implementation, the speed advantage
+was less pronounced: Here the rust implementation is between 25%
+and 50% faster than the C++ implementation and between 5x and 10x
+faster than `sort | uniq -c`.
+
+The increased memory usage of the rust implementation is much worse though:
+The rust implementation needs about 2.2x more memory than the C++ implementation
+and between 10x and 12x more memory than `sort | uniq`.
 
 ```
 repetitions  implemetation  seconds  memory/kb
-1            rust              0.89      29568
-1            cpp               2.62      26080
-1            shell            10.21       9820
-2            rust              2.02      29604
-2            cpp               6.21      26036
-2            shell            34.33       9724
-5            rust              5.25      29548
-5            cpp              12.08      26076
-5            shell            72.30      10004
-10           rust             10.26      29548
-10           cpp              18.87      26128
-10           shell           151.40      10060
-50           rust             50.16      29548
-50           cpp              88.51      26096
-50           shell           675.88      11048
-100          rust             84.96      29604
-100          cpp             149.10      26048
+1            rust              1.31     132096
+1            cpp               1.65      60068
+1            shell             7.09      11500
+2            rust              1.95     132064
+2            cpp               2.73      60076
+2            shell            13.55      11792
+5            rust              4.16     132220
+5            cpp               5.80      60152
+5            shell            36.35      11988
+10           rust              8.12     132104
+10           cpp              11.02      60128
+10           shell            72.01      11984
+50           rust             36.15     132100
+50           cpp              54.13      60052
+50           shell           356.69      13136
 ```
 
 ## Future direction
 
-There is some potential for optimizations…like
+Feature wise huniq is pretty much complete, but the performance and memory usage should be improved in the future.
+
+This first of all involves a better benchmarking setup which will probably consist
+of an extra rust application that will use RNGs to generate test data for huniq and
+take parameters like the number of elements to create, the rate of duplicates (0-1)
+the length of strings to output and so on…
+
+Then based on the improved benchmarking capabilities, some optimizations should be tried
+like short string optimization, arena allocation, different hash functions, using
+memory optimized hash tables, using an identity function for the `uniq` function
+(we already feed it with hashes, so a second round of hashing is not necessary).
 
 ## License
 

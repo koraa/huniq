@@ -9,23 +9,23 @@ huniq1dir="./target/benchmark/huniq1"
 huniq1bin="${huniq1dir}/huniq"
 
 measure() {
-  env time -f'%e %M' "$@" >/dev/null
+  env time -f'%e %M' "$@"
 }
 
 bench_rust() {
-  measure ./target/release/huniq "$@"
+  { measure ./target/release/huniq "$@" >/dev/null; } 2>&1
 }
 
 bench_cpp() {
-  measure "$huniq1bin" "$@"
+  { measure "$huniq1bin" "$@" >/dev/null; } 2>&1
 }
 
 bench_shell() {
   if [[ "$@" = "" ]]; then
-    measure sort -u
+    { measure sort -u >/dev/null; } 2>&1
   else
     {
-      measure sort | measure uniq
+      measure sort | measure uniq -c >/dev/null
     } 2>&1 | awk '
       {
         elapsed=$1;
@@ -59,13 +59,16 @@ main() {
 
   while true; do
     for mode in "uniq" "count"; do
-      for repeats in 1 2 5 10 50 100; do
+      for repeats in 1 2 5 10 50; do
         for impl in rust cpp shell; do
-          echo -n "$mode $repeats $impl "
-          yes | head -n "$repeats" | while read _; do cat /usr/share/dict/*; done \
-            | "bench_${impl}" ${modeargs[${mode}]}
+          yes | head -n "$repeats" \
+            | while read _; do cat /usr/share/dict/*; done \
+            | "bench_${impl}" ${modeargs[${mode}]} \
+            | while read results; do echo "$mode $repeats $impl $results"; done
         done
       done
     done
   done
 }
+
+main
