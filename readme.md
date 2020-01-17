@@ -24,6 +24,12 @@ $ echo -e "foo\nbar\nfoo\nbaz" | huniq -c
 The order of the output is stable when in normal mode, but it is not stable when
 in -c/count mode.
 
+## Installation
+
+```
+$ cargo install huniq
+```
+
 ## Motivation
 
 Sorting is slow. By using hash tables/hash sets instead of sorting
