@@ -1,9 +1,11 @@
 extern crate clap;
+extern crate ahash;
 
-use std::collections::{HashSet, HashMap, hash_map, hash_map::DefaultHasher};
+use std::collections::{HashSet, HashMap, hash_map};
 use std::hash::{Hasher, BuildHasher};
 use std::io::{stdin, BufRead, BufReader, stdout, Write, BufWriter};
 use std::slice;
+use ahash::ABuildHasher;
 use clap::{Arg, App};
 use anyhow::Result;
 
@@ -54,8 +56,8 @@ impl BuildHasher for BuildIdentityHasher {
     }
 }
 
-fn hash<T: std::hash::Hash>(v: &T) -> u64 {
-    let mut s = DefaultHasher::new();
+fn calc_hash<T: BuildHasher, U: std::hash::Hash>(build: &T, v: &U) -> u64 {
+    let mut s = build.build_hasher();
     v.hash(&mut s);
     s.finish()
 }
@@ -65,6 +67,7 @@ fn uniq_cmd(delim: u8) -> Result<()> {
     let inp = stdin();
     let mut out = BufWriter::new(out.lock());
     let mut inp = BufReader::new(inp.lock());
+    let hasher = ABuildHasher::new();
     let mut set = HashSet::<u64, BuildIdentityHasher>::default();
     let mut line = Vec::<u8>::new();
     while inp.read_until(delim, &mut line)? > 0 {
@@ -73,7 +76,7 @@ fn uniq_cmd(delim: u8) -> Result<()> {
             line.pop();
         }
 
-        if set.insert(hash(&line)) {
+        if set.insert(calc_hash(&hasher, &line)) {
             out.write(&line)?;
             out.write(slice::from_ref(&delim))?;
         }
