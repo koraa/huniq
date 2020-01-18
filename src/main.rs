@@ -9,14 +9,15 @@ use anyhow::Result;
 
 fn count_cmd(delim: u8) -> Result<()> {
     let mut set = HashMap::<Vec<u8>, u64>::new();
-    for line in BufReader::new(stdin()).split(delim) {
+    for line in BufReader::new(stdin().lock()).split(delim) {
         match set.entry(line?) {
             hash_map::Entry::Occupied(mut e) => { *e.get_mut() += 1; },
             hash_map::Entry::Vacant(e)   => { e.insert(1); }
         }
     }
 
-    let mut out = BufWriter::new(stdout());
+    let out = stdout();
+    let mut out = BufWriter::new(out.lock());
     for (line, count) in set.iter() {
         write!(out, "{} ", count)?;
         out.write(&line)?;
@@ -33,10 +34,10 @@ fn hash<T: std::hash::Hash>(v: &T) -> u64 {
 }
 
 fn uniq_cmd(delim: u8) -> Result<()> {
-    let mut out = BufWriter::new(stdout());
+    let out = stdout();
+    let mut out = BufWriter::new(out.lock());
     let mut set = HashSet::<u64>::new();
-
-    for line in BufReader::new(stdin()).split(delim) {
+    for line in BufReader::new(stdin().lock()).split(delim) {
         let line = line?;
         if set.insert(hash(&line)) {
             out.write(&line)?;
