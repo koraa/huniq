@@ -1,7 +1,7 @@
 extern crate clap;
 
 use std::collections::{HashSet, HashMap, hash_map, hash_map::DefaultHasher};
-use std::hash::{Hasher};
+use std::hash::{Hasher, BuildHasher};
 use std::io::{stdin, BufRead, BufReader, stdout, Write, BufWriter};
 use std::slice;
 use clap::{Arg, App};
@@ -27,6 +27,33 @@ fn count_cmd(delim: u8) -> Result<()> {
     Ok(())
 }
 
+struct IdentityHasher {
+    off: u8,
+    buf: [u8; 8],
+}
+
+impl Hasher for IdentityHasher {
+    fn write(&mut self, bytes: &[u8]) {
+        self.off += (&mut self.buf[self.off as usize..])
+            .write(bytes).unwrap_or(0) as u8;
+    }
+
+    fn finish(&self) -> u64 {
+        u64::from_ne_bytes(self.buf)
+    }
+}
+
+#[derive(Default)]
+struct BuildIdentityHasher {}
+
+impl BuildHasher for BuildIdentityHasher {
+    type Hasher = IdentityHasher;
+
+    fn build_hasher(&self) -> Self::Hasher {
+        IdentityHasher { off: 0, buf: [0; 8] }
+    }
+}
+
 fn hash<T: std::hash::Hash>(v: &T) -> u64 {
     let mut s = DefaultHasher::new();
     v.hash(&mut s);
@@ -38,7 +65,7 @@ fn uniq_cmd(delim: u8) -> Result<()> {
     let inp = stdin();
     let mut out = BufWriter::new(out.lock());
     let mut inp = BufReader::new(inp.lock());
-    let mut set = HashSet::<u64>::new();
+    let mut set = HashSet::<u64, BuildIdentityHasher>::default();
     let mut line = Vec::<u8>::new();
     while inp.read_until(delim, &mut line)? > 0 {
 
