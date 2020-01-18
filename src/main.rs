@@ -35,14 +35,23 @@ fn hash<T: std::hash::Hash>(v: &T) -> u64 {
 
 fn uniq_cmd(delim: u8) -> Result<()> {
     let out = stdout();
+    let inp = stdin();
     let mut out = BufWriter::new(out.lock());
+    let mut inp = BufReader::new(inp.lock());
     let mut set = HashSet::<u64>::new();
-    for line in BufReader::new(stdin().lock()).split(delim) {
-        let line = line?;
+    let mut line = Vec::<u8>::new();
+    while inp.read_until(delim, &mut line)? > 0 {
+
+        if *line.last().unwrap() == delim {
+            line.pop();
+        }
+
         if set.insert(hash(&line)) {
             out.write(&line)?;
             out.write(slice::from_ref(&delim))?;
         }
+
+        line.clear();
     }
 
     Ok(())
