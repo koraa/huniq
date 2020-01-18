@@ -13,4 +13,4 @@ keywords = ["cli", "uniq"]
 [dependencies]
 clap = "^2.33.0"
 anyhow = "1.0"
-ahash = "0.2.18"
+fxhash = "^0.2.1"
