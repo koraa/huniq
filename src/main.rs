@@ -1,7 +1,7 @@
 use std::collections::{HashSet, HashMap, hash_map};
 use std::hash::{Hash, Hasher, BuildHasher};
 use std::io::{stdin, Read, BufRead, BufReader, stdout, Write, BufWriter, ErrorKind};
-use std::{slice, default::Default, marker::PhantomData};
+use std::{slice, default::Default, marker::PhantomData, clone::Clone};
 use sysconf::page::pagesize;
 use anyhow::Result;
 use clap::{Arg, App};
@@ -46,12 +46,11 @@ impl<H: Hasher + Default> BuildHasher for BuildDefaultHasher<H> {
 /// cryptographically secure RNG at creation
 /// and supplying that as the first value to hash when
 /// creating Hashers
-struct BuildRandomStateHasher<H: Hasher + Default> {
-    seed: u64,
-    _phantom: PhantomData<H>
+struct BuildRandomStateHasher<H: Hasher + Default + Clone> {
+    hasher: H
 }
 
-impl<H: Hasher + Default> BuildRandomStateHasher<H> {
+impl<H: Hasher + Default + Clone> BuildRandomStateHasher<H> {
     fn new() -> Self {
         let mut buf = [0u8; 8];
 
@@ -69,20 +68,18 @@ impl<H: Hasher + Default> BuildRandomStateHasher<H> {
             cnt += 1;
         }
 
-        BuildRandomStateHasher {
-            seed: u64::from_ne_bytes(buf),
-            _phantom: PhantomData
-        }
+        let mut hasher = H::default();
+        hasher.write(&buf);
+
+        BuildRandomStateHasher { hasher }
     }
 }
 
-impl<H: Hasher + Default> BuildHasher for BuildRandomStateHasher<H> {
+impl<H: Hasher + Default + Clone> BuildHasher for BuildRandomStateHasher<H> {
     type Hasher = H;
 
     fn build_hasher(&self) -> Self::Hasher {
-        let mut r = H::default();
-        self.seed.hash(&mut r);
-        r
+        self.hasher.clone()
     }
 }
 
