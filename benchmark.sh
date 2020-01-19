@@ -21,11 +21,12 @@ meas_datamash() {
 }
 
 meas_awk() {
+  local cmd="$1"; shift
   if [[ "$@" = "" ]]; then
-    { measure awk '!visited[$0]++' >/dev/null; } 2>&1
+    { measure "$cmd" '!visited[$0]++' >/dev/null; } 2>&1
   else
     {
-      measure awk '
+      measure "$cmd" '
         {
           visited[$0]++;
         }
@@ -91,7 +92,13 @@ main() {
       for repeats in 1 2 5 10 50 100; do
         bench 'huniq2-rust' meas_exe "${huniq2bin}"
         bench 'huniq1-c++ ' meas_exe "${huniq1bin}"
-        bench 'awk        ' meas_awk
+        bench 'awk-sys    ' meas_awk awk
+        if which gawk 2>/dev/null >/dev/null; then
+          bench 'gawk       ' meas_awk gawk
+        fi
+        if which nawk 2>/dev/null >/dev/null; then
+          bench 'nawk       ' meas_awk nawk
+        fi
         if which datamash 2>/dev/null >/dev/null; then
           bench 'datamash   ' meas_datamash
         fi
