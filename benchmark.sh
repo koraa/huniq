@@ -12,15 +12,32 @@ measure() {
   env time -f'%e %M' "$@"
 }
 
-bench_rust() {
-  { measure ./target/release/huniq "$@" >/dev/null; } 2>&1
+meas_datamash() {
+    if [[ "$@" = "" ]]; then
+      { measure datamash -s groupby 1 first 1 >/dev/null; } 2>&1
+    else
+      { measure datamash -s groupby 1 count 1 >/dev/null; } 2>&1
+    fi
 }
 
-bench_cpp() {
-  { measure "$huniq1bin" "$@" >/dev/null; } 2>&1
+meas_awk() {
+  if [[ "$@" = "" ]]; then
+    { measure awk '!visited[$0]++' >/dev/null; } 2>&1
+  else
+    {
+      measure awk '
+        {
+          visited[$0]++;
+        }
+        END {
+          for (k in visited)
+            print(k, visited[k]);
+        }' >/dev/null
+    } 2>&1
+  fi
 }
 
-bench_shell() {
+meas_shell() {
   if [[ "$@" = "" ]]; then
     { measure sort -u >/dev/null; } 2>&1
   else
@@ -36,6 +53,18 @@ bench_shell() {
         print(elapsed, mem);
       }'
   fi
+}
+
+meas_exe() {
+  { measure "$@" >/dev/null; } 2>&1
+}
+
+bench() {
+  local name="$1"; shift
+  yes | head -n "$repeats" \
+    | while read _; do cat /usr/share/dict/*; done \
+    | "$@" ${modeargs[${mode}]} \
+    | while read results; do echo "$mode $repeats $name $results"; done
 }
 
 main() {
@@ -59,13 +88,15 @@ main() {
 
   while true; do
     for mode in "uniq" "count"; do
-      for repeats in 1 2 5 10 50; do
-        for impl in rust cpp shell; do
-          yes | head -n "$repeats" \
-            | while read _; do cat /usr/share/dict/*; done \
-            | "bench_${impl}" ${modeargs[${mode}]} \
-            | while read results; do echo "$mode $repeats $impl $results"; done
-        done
+      for repeats in 1 2 5 10 50 100; do
+        bench 'huniq2-rust' meas_exe "${huniq2bin}"
+        bench 'huniq1-c++ ' meas_exe "${huniq1bin}"
+        bench 'awk        ' meas_awk
+        if which datamash 2>/dev/null >/dev/null; then
+          bench 'datamash   ' meas_datamash
+        fi
+        bench 'shell      ' meas_shell
+        echo
       done
     done
   done
