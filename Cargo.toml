@@ -13,7 +13,6 @@ keywords = ["cli", "uniq"]
 [dependencies]
 clap = "^2.33.0"
 anyhow = "^1.0.26"
-fxhash = "^0.2.1"
 sysconf = "^0.3.4"
 getrandom = "0.1.14"
 
