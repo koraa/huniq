@@ -1,32 +1,11 @@
-extern crate clap;
-
-use std::collections::{HashSet, HashMap, hash_map};
+use std::collections::{HashSet, HashMap, hash_map, hash_map::DefaultHasher};
 use std::hash::{Hasher, BuildHasher};
-use std::io::{stdin, BufRead, BufReader, stdout, Write, BufWriter};
+use std::io::{stdin, Read, BufRead, BufReader, stdout, Write, BufWriter, ErrorKind};
 use std::slice;
-use fxhash::FxBuildHasher;
-use clap::{Arg, App};
+use sysconf::page::pagesize;
 use anyhow::Result;
-
-fn count_cmd(delim: u8) -> Result<()> {
-    let mut set = HashMap::<Vec<u8>, u64>::new();
-    for line in BufReader::new(stdin().lock()).split(delim) {
-        match set.entry(line?) {
-            hash_map::Entry::Occupied(mut e) => { *e.get_mut() += 1; },
-            hash_map::Entry::Vacant(e)   => { e.insert(1); }
-        }
-    }
-
-    let out = stdout();
-    let mut out = BufWriter::new(out.lock());
-    for (line, count) in set.iter() {
-        write!(out, "{} ", count)?;
-        out.write(&line)?;
-        out.write(slice::from_ref(&delim))?;
-    }
-
-    Ok(())
-}
+use clap::{Arg, App};
+use fxhash::FxBuildHasher;
 
 struct IdentityHasher {
     off: u8,
@@ -55,32 +34,117 @@ impl BuildHasher for BuildIdentityHasher {
     }
 }
 
-fn calc_hash<T: BuildHasher, U: std::hash::Hash>(build: &T, v: &U) -> u64 {
+fn calc_hash<T: BuildHasher, U: std::hash::Hash + ?Sized>(build: &T, v: &U) -> u64 {
     let mut s = build.build_hasher();
     v.hash(&mut s);
     s.finish()
 }
 
-fn uniq_cmd(delim: u8) -> Result<()> {
+fn count_cmd(delim: u8) -> Result<()> {
+    let mut set = HashMap::<Vec<u8>, u64>::new();
+    for line in BufReader::new(stdin().lock()).split(delim) {
+        match set.entry(line?) {
+            hash_map::Entry::Occupied(mut e) => { *e.get_mut() += 1; },
+            hash_map::Entry::Vacant(e)   => { e.insert(1); }
+        }
+    }
+
     let out = stdout();
-    let inp = stdin();
     let mut out = BufWriter::new(out.lock());
-    let mut inp = BufReader::new(inp.lock());
+    for (line, count) in set.iter() {
+        write!(out, "{} ", count)?;
+        out.write(&line)?;
+        out.write(slice::from_ref(&delim))?;
+    }
+
+    Ok(())
+}
+
+// Remove duplicates from stdin and print to stdout.
+// Optimizations used:
+// * Use lock() on stdin/stout
+// * Use manual buffering to avoid the extra copy incured with
+fn uniq_cmd(delim: u8) -> Result<()> {
+    // Line processing/output ///////////////////////
+
+    let out = stdout();
+    let mut out = BufWriter::new(out.lock());
     let hasher = FxBuildHasher::default();
     let mut set = HashSet::<u64, BuildIdentityHasher>::default();
-    let mut line = Vec::<u8>::new();
-    while inp.read_until(delim, &mut line)? > 0 {
 
-        if *line.last().unwrap() == delim {
-            line.pop();
-        }
-
-        if set.insert(calc_hash(&hasher, &line)) {
+    // Handler: We managed to find a line! Process the line
+    // The line *always* includes the delimiter at the end
+    let mut found_line = |line: &[u8]| -> Result<()> {
+        let tok: &[u8] = &line[..line.len()-1];
+        if set.insert(calc_hash(&hasher, &tok)) {
             out.write(&line)?;
-            out.write(slice::from_ref(&delim))?;
+        }
+        Ok(())
+    };
+
+    // Line Spitting/input //////////////////////////
+
+    let inp = stdin();
+    let mut inp = inp.lock();
+
+    // Our manually managed stdin buffer; using BufReader would not
+    // allow us to control the buffer size which we need to support
+    // very long lines in the primary buffer.
+    let mut buf = Vec::<u8>::new();
+    buf.resize(pagesize() * 2, 0);
+
+    // Amount of data actually in the buffer (manually managed so we
+    // can avoid reinitializing all the data when we resize)
+    let mut used: usize = 0;
+
+    loop {
+        match inp.read(&mut buf[used..] /* unused space */) {
+            Err(ref e) if e.kind() == ErrorKind::Interrupted =>
+                // EINTR – thrown when a process receives a signal…
+                continue,
+            Err(e) =>
+                return Err(anyhow::Error::from(e)),
+            Ok(0) => {
+                // EOF; we potentially need to process the last word here
+                // if the input is missing a newline (or rather delim) at
+                // the end of it's input
+                if used != 0 {
+                    // Grow the buffer if this is necessary to insert the delimiter
+                    if used == buf.len() {
+                        buf.push(delim);
+                    } else {
+                        buf[used] = delim;
+                    }
+                    used += 1;
+
+                    found_line(&buf[..used])?;
+                }
+                break;
+            }, Ok(len) =>
+                // Register the data that became available
+                used += len
+        };
+
+        // Scan the buffer for lines
+        let mut line_start: usize = 0;
+        for (off, chr) in (&buf[..used]).iter().enumerate() {
+            if *chr == delim {
+                found_line(&buf[line_start..off+1])?;
+                line_start = off + 1;
+            }
         }
 
-        line.clear();
+        // Move the current line fragment to the start of the buffer
+        // so we can fill the rest
+        buf.copy_within(line_start.., 0);
+        used = used - line_start; // Length of the rest
+
+        // Grow the buffer if necessary, letting Vec decide what growth
+        // factor to use
+        if used == buf.len() {
+            buf.resize(buf.len() + 1, 0);
+            buf.resize(buf.capacity(), 0);
+        }
     }
 
     Ok(())
