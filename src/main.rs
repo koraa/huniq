@@ -1,11 +1,12 @@
 use std::collections::{HashSet, HashMap, hash_map};
-use std::hash::{Hasher, BuildHasher};
+use std::hash::{Hash, Hasher, BuildHasher};
 use std::io::{stdin, Read, BufRead, BufReader, stdout, Write, BufWriter, ErrorKind};
 use std::{slice, default::Default, marker::PhantomData};
 use sysconf::page::pagesize;
 use anyhow::Result;
 use clap::{Arg, App};
-use ahash::ABuildHasher;
+use fxhash::FxHasher64;
+use getrandom::getrandom;
 
 
 /// A no-operation hasher. Used as part of the uniq implementation,
@@ -37,6 +38,51 @@ impl<H: Hasher + Default> BuildHasher for BuildDefaultHasher<H> {
 
     fn build_hasher(&self) -> Self::Hasher {
         H::default()
+    }
+}
+
+/// Like RandomState, but for arbitrary hash functions.
+/// Works by fetching a random 64bit value from the system
+/// cryptographically secure RNG at creation
+/// and supplying that as the first value to hash when
+/// creating Hashers
+struct BuildRandomStateHasher<H: Hasher + Default> {
+    seed: u64,
+    _phantom: PhantomData<H>
+}
+
+impl<H: Hasher + Default> BuildRandomStateHasher<H> {
+    fn new() -> Self {
+        let mut buf = [0u8; 8];
+
+        // Handle errors in getrandom() by just retrying up to 10 times.
+        let mut cnt = 0;
+        loop {
+            let res = getrandom(&mut buf);
+
+            if res.is_ok() {
+                break;
+            } else if cnt > 10 {
+                res.unwrap();
+            }
+
+            cnt += 1;
+        }
+
+        BuildRandomStateHasher {
+            seed: u64::from_ne_bytes(buf),
+            _phantom: PhantomData
+        }
+    }
+}
+
+impl<H: Hasher + Default> BuildHasher for BuildRandomStateHasher<H> {
+    type Hasher = H;
+
+    fn build_hasher(&self) -> Self::Hasher {
+        let mut r = H::default();
+        self.seed.hash(&mut r);
+        r
     }
 }
 
@@ -155,7 +201,7 @@ fn uniq_cmd(delim: u8) -> Result<()> {
     // Line processing/output ///////////////////////
     let out = stdout();
     let inp = stdin();
-    let hasher = ABuildHasher::new();
+    let hasher = BuildRandomStateHasher::<FxHasher64>::new();
     let mut out = BufWriter::new(out.lock());
     let mut set = HashSet::<u64, BuildDefaultHasher<IdentityHasher>>::default();
 
