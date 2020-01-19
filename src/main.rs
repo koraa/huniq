@@ -1,12 +1,15 @@
+mod xxhash;
+mod xxhash_bindings;
+
 use std::collections::{HashSet, HashMap, hash_map};
-use std::hash::{Hash, Hasher, BuildHasher};
+use std::hash::{Hasher, BuildHasher};
 use std::io::{stdin, Read, BufRead, BufReader, stdout, Write, BufWriter, ErrorKind};
-use std::{slice, default::Default, marker::PhantomData, clone::Clone};
+use std::{slice, default::Default, marker::PhantomData};
 use sysconf::page::pagesize;
 use anyhow::Result;
 use clap::{Arg, App};
-use fxhash::FxHasher64;
 use getrandom::getrandom;
+use crate::xxhash::xxh3_u64_secret;
 
 
 /// A no-operation hasher. Used as part of the uniq implementation,
@@ -39,55 +42,6 @@ impl<H: Hasher + Default> BuildHasher for BuildDefaultHasher<H> {
     fn build_hasher(&self) -> Self::Hasher {
         H::default()
     }
-}
-
-/// Like RandomState, but for arbitrary hash functions.
-/// Works by fetching a random 64bit value from the system
-/// cryptographically secure RNG at creation
-/// and supplying that as the first value to hash when
-/// creating Hashers
-struct BuildRandomStateHasher<H: Hasher + Default + Clone> {
-    hasher: H
-}
-
-impl<H: Hasher + Default + Clone> BuildRandomStateHasher<H> {
-    fn new() -> Self {
-        let mut buf = [0u8; 8];
-
-        // Handle errors in getrandom() by just retrying up to 10 times.
-        let mut cnt = 0;
-        loop {
-            let res = getrandom(&mut buf);
-
-            if res.is_ok() {
-                break;
-            } else if cnt > 10 {
-                res.unwrap();
-            }
-
-            cnt += 1;
-        }
-
-        let mut hasher = H::default();
-        hasher.write(&buf);
-
-        BuildRandomStateHasher { hasher }
-    }
-}
-
-impl<H: Hasher + Default + Clone> BuildHasher for BuildRandomStateHasher<H> {
-    type Hasher = H;
-
-    fn build_hasher(&self) -> Self::Hasher {
-        self.hasher.clone()
-    }
-}
-
-/// Hash the given value with the given BuildHasher. Now.
-fn hash<T: BuildHasher, U: std::hash::Hash + ?Sized>(build: &T, v: &U) -> u64 {
-    let mut s = build.build_hasher();
-    v.hash(&mut s);
-    s.finish()
 }
 
 /// Split the input stream into tokens at the given delimiter.
@@ -198,16 +152,16 @@ fn uniq_cmd(delim: u8) -> Result<()> {
     // Line processing/output ///////////////////////
     let out = stdout();
     let inp = stdin();
-    let hasher = BuildRandomStateHasher::<FxHasher64>::new();
     let mut out = BufWriter::new(out.lock());
     let mut set = HashSet::<u64, BuildDefaultHasher<IdentityHasher>>::default();
 
-    // Handler: We managed to find a line! Process the line
-    // The line *always* includes the delimiter at the end    let mut out = BufWriter::new(out.lock());
+    // Mitigate hash collision attacks by using a random seed
+    let mut secret = [0u8, 8];
+    getrandom(&mut secret)?;
 
     split_read_zerocopy(delim, &mut inp.lock(), |line| {
         let tok: &[u8] = &line[..line.len()-1];
-        if set.insert(hash(&hasher, &tok)) {
+        if set.insert(xxh3_u64_secret(&tok, &secret)) {
             out.write(&line)?;
         }
         Ok(())

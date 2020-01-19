@@ -16,3 +16,9 @@ anyhow = "^1.0.26"
 fxhash = "^0.2.1"
 sysconf = "^0.3.4"
 getrandom = "0.1.14"
+
+[build-dependencies]
+bindgen = "^0.52.0"
+cc = { version = "^1.0.48", features = ["parallel"] }
+failure = "^0.1.6"
+shell-words = "^0.1.0"
