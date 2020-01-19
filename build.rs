@@ -2,9 +2,7 @@ extern crate bindgen;
 
 use std::env;
 use std::path::PathBuf;
-use failure::Error;
-
-type Result<T> = std::result::Result<T, Error>;
+use anyhow::Result;
 
 fn try_main() -> Result<()> {
     let out_dir = PathBuf::from(env::var("OUT_DIR")?);

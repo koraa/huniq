@@ -14,10 +14,10 @@ keywords = ["cli", "uniq"]
 clap = "^2.33.0"
 anyhow = "^1.0.26"
 sysconf = "^0.3.4"
-getrandom = "0.1.14"
+getrandom = "^0.1.14"
 
 [build-dependencies]
 bindgen = "^0.52.0"
 cc = { version = "^1.0.48", features = ["parallel"] }
-failure = "^0.1.6"
+anyhow = "^1.0.26"
 shell-words = "^0.1.0"
