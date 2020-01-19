@@ -1,12 +1,17 @@
-use std::collections::{HashSet, HashMap, hash_map, hash_map::DefaultHasher};
+use std::collections::{HashSet, HashMap, hash_map};
 use std::hash::{Hasher, BuildHasher};
 use std::io::{stdin, Read, BufRead, BufReader, stdout, Write, BufWriter, ErrorKind};
-use std::slice;
+use std::{slice, default::Default, marker::PhantomData};
 use sysconf::page::pagesize;
 use anyhow::Result;
 use clap::{Arg, App};
-use fxhash::FxBuildHasher;
+use ahash::ABuildHasher;
 
+
+/// A no-operation hasher. Used as part of the uniq implementation,
+/// because in there we manually hash the data and just store the
+/// hashes of the data in the hash set. No need to hash twice
+#[derive(Default)]
 struct IdentityHasher {
     off: u8,
     buf: [u8; 8],
@@ -23,75 +28,47 @@ impl Hasher for IdentityHasher {
     }
 }
 
+/// BuildHasher for any Hasher that implements Default
 #[derive(Default)]
-struct BuildIdentityHasher {}
+struct BuildDefaultHasher<H: Hasher + Default>(PhantomData<H>);
 
-impl BuildHasher for BuildIdentityHasher {
-    type Hasher = IdentityHasher;
+impl<H: Hasher + Default> BuildHasher for BuildDefaultHasher<H> {
+    type Hasher = H;
 
     fn build_hasher(&self) -> Self::Hasher {
-        IdentityHasher { off: 0, buf: [0; 8] }
+        H::default()
     }
 }
 
-fn calc_hash<T: BuildHasher, U: std::hash::Hash + ?Sized>(build: &T, v: &U) -> u64 {
+/// Hash the given value with the given BuildHasher. Now.
+fn hash<T: BuildHasher, U: std::hash::Hash + ?Sized>(build: &T, v: &U) -> u64 {
     let mut s = build.build_hasher();
     v.hash(&mut s);
     s.finish()
 }
 
-fn count_cmd(delim: u8) -> Result<()> {
-    let mut set = HashMap::<Vec<u8>, u64>::new();
-    for line in BufReader::new(stdin().lock()).split(delim) {
-        match set.entry(line?) {
-            hash_map::Entry::Occupied(mut e) => { *e.get_mut() += 1; },
-            hash_map::Entry::Vacant(e)   => { e.insert(1); }
-        }
-    }
+/// Split the input stream into tokens at the given delimiter.
+///
+/// This is an alternative to BufRead::split or BufRead::read_until
+/// that does not allocate or copy the tokens around much in memory
+/// usually.
+///
+/// (Maintains an internal buffer that will be reallocated if a token larger
+/// than the buffer is encountered and when there is a token at the end of
+/// the buffer, it will be moved to the start before refilling the buffer,
+/// but in the normal case, no allocation or copy will occur to read a token).
+///
+/// The tokens found will be passed to the given callback. The tokens will
+/// always be terminated by the delimiter at the end. Even if the last token
+/// is delimited by eof and not the delimiter, a delimiter will be supplied.
+fn split_read_zerocopy<R, F>(
+        delim: u8, inp: &mut R, mut handle_line: F)
+        -> Result<()>
+        where R: Read, F: FnMut(&[u8]) -> Result<()> {
 
-    let out = stdout();
-    let mut out = BufWriter::new(out.lock());
-    for (line, count) in set.iter() {
-        write!(out, "{} ", count)?;
-        out.write(&line)?;
-        out.write(slice::from_ref(&delim))?;
-    }
-
-    Ok(())
-}
-
-// Remove duplicates from stdin and print to stdout.
-// Optimizations used:
-// * Use lock() on stdin/stout
-// * Use manual buffering to avoid the extra copy incured with
-fn uniq_cmd(delim: u8) -> Result<()> {
-    // Line processing/output ///////////////////////
-
-    let out = stdout();
-    let mut out = BufWriter::new(out.lock());
-    let hasher = FxBuildHasher::default();
-    let mut set = HashSet::<u64, BuildIdentityHasher>::default();
-
-    // Handler: We managed to find a line! Process the line
-    // The line *always* includes the delimiter at the end
-    let mut found_line = |line: &[u8]| -> Result<()> {
-        let tok: &[u8] = &line[..line.len()-1];
-        if set.insert(calc_hash(&hasher, &tok)) {
-            out.write(&line)?;
-        }
-        Ok(())
-    };
-
-    // Line Spitting/input //////////////////////////
-
-    let inp = stdin();
-    let mut inp = inp.lock();
-
-    // Our manually managed stdin buffer; using BufReader would not
-    // allow us to control the buffer size which we need to support
-    // very long lines in the primary buffer.
-    let mut buf = Vec::<u8>::new();
-    buf.resize(pagesize() * 2, 0);
+    // Initialize the buffer
+    let mut buf = Vec::<u8>::with_capacity(pagesize() * 2);
+    buf.resize(buf.capacity(), 0);
 
     // Amount of data actually in the buffer (manually managed so we
     // can avoid reinitializing all the data when we resize)
@@ -117,8 +94,9 @@ fn uniq_cmd(delim: u8) -> Result<()> {
                     }
                     used += 1;
 
-                    found_line(&buf[..used])?;
+                    handle_line(&buf[..used])?;
                 }
+
                 break;
             }, Ok(len) =>
                 // Register the data that became available
@@ -129,7 +107,7 @@ fn uniq_cmd(delim: u8) -> Result<()> {
         let mut line_start: usize = 0;
         for (off, chr) in (&buf[..used]).iter().enumerate() {
             if *chr == delim {
-                found_line(&buf[line_start..off+1])?;
+                handle_line(&buf[line_start..off+1])?;
                 line_start = off + 1;
             }
         }
@@ -146,6 +124,51 @@ fn uniq_cmd(delim: u8) -> Result<()> {
             buf.resize(buf.capacity(), 0);
         }
     }
+
+    Ok(())
+}
+
+/// Remove duplicates from stdin and print to stdout, counting
+/// the number of occurrences.
+fn count_cmd(delim: u8) -> Result<()> {
+    let mut set = HashMap::<Vec<u8>, u64>::new();
+    for line in BufReader::new(stdin().lock()).split(delim) {
+        match set.entry(line?) {
+            hash_map::Entry::Occupied(mut e) => { *e.get_mut() += 1; },
+            hash_map::Entry::Vacant(e)   => { e.insert(1); }
+        }
+    }
+
+    let out = stdout();
+    let mut out = BufWriter::new(out.lock());
+    for (line, count) in set.iter() {
+        write!(out, "{} ", count)?;
+        out.write(&line)?;
+        out.write(slice::from_ref(&delim))?;
+    }
+
+    Ok(())
+}
+
+/// Remove duplicates from stdin and print to stdout.
+fn uniq_cmd(delim: u8) -> Result<()> {
+    // Line processing/output ///////////////////////
+    let out = stdout();
+    let inp = stdin();
+    let hasher = ABuildHasher::new();
+    let mut out = BufWriter::new(out.lock());
+    let mut set = HashSet::<u64, BuildDefaultHasher<IdentityHasher>>::default();
+
+    // Handler: We managed to find a line! Process the line
+    // The line *always* includes the delimiter at the end    let mut out = BufWriter::new(out.lock());
+
+    split_read_zerocopy(delim, &mut inp.lock(), |line| {
+        let tok: &[u8] = &line[..line.len()-1];
+        if set.insert(hash(&hasher, &tok)) {
+            out.write(&line)?;
+        }
+        Ok(())
+    })?;
 
     Ok(())
 }
