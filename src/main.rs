@@ -64,8 +64,7 @@ fn split_read_zerocopy<R, F>(
         where R: Read, F: FnMut(&[u8]) -> Result<()> {
 
     // Initialize the buffer
-    let mut buf = Vec::<u8>::with_capacity(pagesize() * 2);
-    buf.resize(buf.capacity(), 0);
+    let mut buf = vec![0u8; pagesize() * 2];
 
     // Amount of data actually in the buffer (manually managed so we
     // can avoid reinitializing all the data when we resize)
