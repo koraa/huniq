@@ -66,27 +66,26 @@ where
     // Initialize the buffer
     let mut buf = vec![0u8; pagesize() * 2]; // buf.capacity() == buf.len() == pagesize() * 2
 
-    // Amount of data actually in the buffer (manually managed so we
-    // can avoid reinitializing all the data when we resize)
-    let mut used: usize = 0;
-
     loop {
+        // Amount of data actually in the buffer
+        let used = buf.len();
         buf.resize(buf.capacity(), 0);
         match inp.read(&mut buf[used..] /* unused space */)? {
             0 => {
                 // EOF; we potentially need to process the last word here
                 // if the input is missing a newline (or rather delim) at
                 // the end of it's input
-                if used != 0 {
-                    handle_line(&buf[..used])?;
+                buf.truncate(used);
+                if !buf.is_empty() {
+                    handle_line(&buf)?;
                 }
 
                 break;
             }
             len => {
                 // Register the data that became available
-                used += len;
-                if let Some(last_delim_pos) = buf[..used].iter().rposition(|chr| *chr == delim) {
+                buf.truncate(used + len);
+                if let Some(last_delim_pos) = buf.iter().rposition(|chr| *chr == delim) {
                     buf[..last_delim_pos]
                         .split(|chr| *chr == delim)
                         .try_for_each(|line| handle_line(line))?;
@@ -94,14 +93,14 @@ where
                     // Move the current line fragment to the start of the buffer
                     // so we can fill the rest
                     buf.copy_within(last_delim_pos + 1.., 0);
-                    used = used - (last_delim_pos + 1); // Length of the rest
+                    buf.truncate(buf.len() - (last_delim_pos + 1)); // Length of the rest
+                } else {
+                    // Grow the buffer if necessary, letting Vec decide what growth
+                    // factor to use
+                    buf.reserve(buf.len() + 1)
                 }
             }
         };
-
-        // Grow the buffer if necessary, letting Vec decide what growth
-        // factor to use
-        buf.resize(used + 1, 0)
     }
 
     Ok(())
