@@ -3,7 +3,7 @@ mod xxhash_bindings;
 
 use std::collections::{HashSet, HashMap, hash_map};
 use std::hash::{Hasher, BuildHasher};
-use std::io::{stdin, Read, BufRead, BufReader, stdout, Write, BufWriter, ErrorKind};
+use std::io::{stdin, Read, BufRead, stdout, Write, ErrorKind};
 use std::{slice, default::Default, marker::PhantomData};
 use sysconf::page::pagesize;
 use anyhow::Result;
@@ -127,7 +127,7 @@ fn split_read_zerocopy<R, F>(
 /// the number of occurrences.
 fn count_cmd(delim: u8) -> Result<()> {
     let mut set = HashMap::<Vec<u8>, u64>::new();
-    for line in BufReader::new(stdin().lock()).split(delim) {
+    for line in stdin().lock().split(delim) {
         match set.entry(line?) {
             hash_map::Entry::Occupied(mut e) => { *e.get_mut() += 1; },
             hash_map::Entry::Vacant(e)   => { e.insert(1); }
@@ -135,7 +135,7 @@ fn count_cmd(delim: u8) -> Result<()> {
     }
 
     let out = stdout();
-    let mut out = BufWriter::new(out.lock());
+    let mut out = out.lock();
     for (line, count) in set.iter() {
         write!(out, "{} ", count)?;
         out.write(&line)?;
@@ -150,7 +150,7 @@ fn uniq_cmd(delim: u8) -> Result<()> {
     // Line processing/output ///////////////////////
     let out = stdout();
     let inp = stdin();
-    let mut out = BufWriter::new(out.lock());
+    let mut out = out.lock();
     let mut set = HashSet::<u64, BuildDefaultHasher<IdentityHasher>>::default();
 
     // Mitigate hash collision attacks by using a random seed
