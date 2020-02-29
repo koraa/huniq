@@ -71,6 +71,7 @@ where
     let mut used: usize = 0;
 
     loop {
+        buf.resize(buf.capacity(), 0);
         match inp.read(&mut buf[used..] /* unused space */)? {
             0 => {
                 // EOF; we potentially need to process the last word here
@@ -111,10 +112,7 @@ where
 
         // Grow the buffer if necessary, letting Vec decide what growth
         // factor to use
-        if used == buf.len() {
-            buf.resize(buf.len() + 1, 0);
-            buf.resize(buf.capacity(), 0);
-        }
+        buf.resize(used + 1, 0)
     }
 
     Ok(())
