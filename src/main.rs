@@ -7,7 +7,7 @@ use clap::{App, Arg};
 use getrandom::getrandom;
 use std::collections::{hash_map, HashMap, HashSet};
 use std::hash::{BuildHasher, Hasher};
-use std::io::{stdin, stdout, BufRead, ErrorKind, Read, Write};
+use std::io::{stdin, stdout, BufRead, Read, Write};
 use std::{default::Default, marker::PhantomData, slice};
 use sysconf::page::pagesize;
 
@@ -71,14 +71,8 @@ where
     let mut used: usize = 0;
 
     loop {
-        match inp.read(&mut buf[used..] /* unused space */) {
-            Err(ref e) if e.kind() == ErrorKind::Interrupted =>
-            // EINTR – thrown when a process receives a signal…
-            {
-                continue
-            }
-            Err(e) => return Err(anyhow::Error::from(e)),
-            Ok(0) => {
+        match inp.read(&mut buf[used..] /* unused space */)? {
+            0 => {
                 // EOF; we potentially need to process the last word here
                 // if the input is missing a newline (or rather delim) at
                 // the end of it's input
@@ -96,9 +90,8 @@ where
 
                 break;
             }
-            Ok(len) =>
-            // Register the data that became available
-            {
+            len => {
+                // Register the data that became available
                 used += len
             }
         };
