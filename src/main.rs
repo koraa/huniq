@@ -98,11 +98,10 @@ where
 
         // Scan the buffer for lines
         let mut line_start: usize = 0;
-        for (off, chr) in (&buf[..used]).iter().enumerate() {
-            if *chr == delim {
-                handle_line(&buf[line_start..off + 1])?;
-                line_start = off + 1;
-            }
+        let mut it = (&buf[..used]).iter();
+        while let Some(off) = it.position(|chr| *chr == delim) {
+            handle_line(&buf[line_start..line_start + off + 1])?;
+            line_start += off + 1;
         }
 
         // Move the current line fragment to the start of the buffer
