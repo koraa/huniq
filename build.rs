@@ -1,8 +1,8 @@
 extern crate bindgen;
 
+use anyhow::Result;
 use std::env;
 use std::path::PathBuf;
-use anyhow::Result;
 
 fn try_main() -> Result<()> {
     let out_dir = PathBuf::from(env::var("OUT_DIR")?);
@@ -12,12 +12,15 @@ fn try_main() -> Result<()> {
         r
     };
 
-
     // Configure C build
-    env::set_var("CPPFLAGS",
-        format!("-I{dir}/vendor/xxhash/ -DXXH_STATIC_LINKING_ONLY=1 {old}", 
-            dir=project_dir.display(),
-            old=env::var("CPPFLAGS").unwrap_or("".to_string())));
+    env::set_var(
+        "CPPFLAGS",
+        format!(
+            "-I{dir}/vendor/xxhash/ -DXXH_STATIC_LINKING_ONLY=1 {old}",
+            dir = project_dir.display(),
+            old = env::var("CPPFLAGS").unwrap_or("".to_string())
+        ),
+    );
 
     // Compile xxhash
     cc::Build::new()
