@@ -85,22 +85,19 @@ where
             }
             len => {
                 // Register the data that became available
-                used += len
+                used += len;
+                if let Some(last_delim_pos) = buf[..used].iter().rposition(|chr| *chr == delim) {
+                    buf[..last_delim_pos]
+                        .split(|chr| *chr == delim)
+                        .try_for_each(|line| handle_line(line))?;
+
+                    // Move the current line fragment to the start of the buffer
+                    // so we can fill the rest
+                    buf.copy_within(last_delim_pos + 1.., 0);
+                    used = used - (last_delim_pos + 1); // Length of the rest
+                }
             }
         };
-
-        // Scan the buffer for lines
-        let mut line_start: usize = 0;
-        let mut it = (&buf[..used]).iter();
-        while let Some(off) = it.position(|chr| *chr == delim) {
-            handle_line(&buf[line_start..line_start + off])?;
-            line_start += off + 1;
-        }
-
-        // Move the current line fragment to the start of the buffer
-        // so we can fill the rest
-        buf.copy_within(line_start.., 0);
-        used = used - line_start; // Length of the rest
 
         // Grow the buffer if necessary, letting Vec decide what growth
         // factor to use
