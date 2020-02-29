@@ -78,14 +78,6 @@ where
                 // if the input is missing a newline (or rather delim) at
                 // the end of it's input
                 if used != 0 {
-                    // Grow the buffer if this is necessary to insert the delimiter
-                    if used == buf.len() {
-                        buf.push(delim);
-                    } else {
-                        buf[used] = delim;
-                    }
-                    used += 1;
-
                     handle_line(&buf[..used])?;
                 }
 
@@ -101,7 +93,7 @@ where
         let mut line_start: usize = 0;
         let mut it = (&buf[..used]).iter();
         while let Some(off) = it.position(|chr| *chr == delim) {
-            handle_line(&buf[line_start..line_start + off + 1])?;
+            handle_line(&buf[line_start..line_start + off])?;
             line_start += off + 1;
         }
 
@@ -160,6 +152,7 @@ fn uniq_cmd(delim: u8) -> Result<()> {
         let tok: &[u8] = &line[..line.len() - 1];
         if set.insert(xxh3_u64_secret(&tok, &secret)) {
             out.write(&line)?;
+            out.write(&[delim])?;
         }
         Ok(())
     })?;
