@@ -7,7 +7,7 @@ use clap::{App, Arg};
 use getrandom::getrandom;
 use std::collections::{hash_map, HashMap, HashSet};
 use std::hash::{BuildHasher, Hasher};
-use std::io::{stdin, stdout, BufRead, BufReader, BufWriter, ErrorKind, Read, Write};
+use std::io::{stdin, stdout, BufRead, ErrorKind, Read, Write};
 use std::{default::Default, marker::PhantomData, slice};
 use sysconf::page::pagesize;
 
@@ -132,7 +132,7 @@ where
 /// the number of occurrences.
 fn count_cmd(delim: u8) -> Result<()> {
     let mut set = HashMap::<Vec<u8>, u64>::new();
-    for line in BufReader::new(stdin().lock()).split(delim) {
+    for line in stdin().lock().split(delim) {
         match set.entry(line?) {
             hash_map::Entry::Occupied(mut e) => {
                 *e.get_mut() += 1;
@@ -144,7 +144,7 @@ fn count_cmd(delim: u8) -> Result<()> {
     }
 
     let out = stdout();
-    let mut out = BufWriter::new(out.lock());
+    let mut out = out.lock();
     for (line, count) in set.iter() {
         write!(out, "{} ", count)?;
         out.write(&line)?;
@@ -159,7 +159,7 @@ fn uniq_cmd(delim: u8) -> Result<()> {
     // Line processing/output ///////////////////////
     let out = stdout();
     let inp = stdin();
-    let mut out = BufWriter::new(out.lock());
+    let mut out = out.lock();
     let mut set = HashSet::<u64, BuildDefaultHasher<IdentityHasher>>::default();
 
     // Mitigate hash collision attacks by using a random seed
