@@ -15,6 +15,7 @@ clap = "^2.33.0"
 anyhow = "^1.0.26"
 sysconf = "^0.3.4"
 getrandom = "^0.1.14"
+memchr = "2.3.3"
 
 [build-dependencies]
 bindgen = "^0.52.0"

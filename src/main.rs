@@ -10,6 +10,7 @@ use anyhow::Result;
 use clap::{Arg, App};
 use getrandom::getrandom;
 use crate::xxhash::xxh3_u64_secret;
+use memchr::memchr_iter;
 
 
 /// A no-operation hasher. Used as part of the uniq implementation,
@@ -101,11 +102,9 @@ fn split_read_zerocopy<R, F>(
 
         // Scan the buffer for lines
         let mut line_start: usize = 0;
-        for (off, chr) in (&buf[..used]).iter().enumerate() {
-            if *chr == delim {
-                handle_line(&buf[line_start..off+1])?;
-                line_start = off + 1;
-            }
+        for off in memchr_iter(delim, &buf[..used]) {
+            handle_line(&buf[line_start..off+1])?;
+            line_start = off + 1;
         }
 
         // Move the current line fragment to the start of the buffer

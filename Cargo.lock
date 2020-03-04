@@ -205,6 +205,7 @@ dependencies = [
  "cc",
  "clap",
  "getrandom",
+ "memchr",
  "shell-words",
  "sysconf",
 ]
@@ -267,9 +268,9 @@ dependencies = [
 
 [[package]]
 name = "memchr"
-version = "2.3.0"
+version = "2.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3197e20c7edb283f87c071ddfc7a2cca8f8e0b888c242959846a6fce03c72223"
+checksum = "3728d817d99e5ac407411fa471ff9800a778d88a24685968b36824eaf4bee400"
 
 [[package]]
 name = "nom"
