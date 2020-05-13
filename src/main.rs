@@ -162,7 +162,7 @@ fn uniq_cmd(delim: u8) -> Result<()> {
     let mut set = HashSet::<u64, BuildDefaultHasher<IdentityHasher>>::default();
 
     // Mitigate hash collision attacks by using a random seed
-    let mut secret = [0u8, 8];
+    let mut secret = [0u8; 32];
     getrandom(&mut secret)?;
 
     split_read_zerocopy(delim, &mut inp.lock(), |line| {
