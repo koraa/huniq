@@ -2,10 +2,11 @@ mod xxhash;
 mod xxhash_bindings;
 
 use crate::xxhash::xxh3_u64_secret;
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use clap::{App, Arg};
 use getrandom::getrandom;
 use memchr::memchr_iter;
+use std::cmp::Ordering;
 use std::collections::{hash_map, HashMap, HashSet};
 use std::hash::{BuildHasher, Hasher};
 use std::io::{stdin, stdout, BufRead, ErrorKind, Read, Write};
@@ -43,6 +44,11 @@ impl<H: Hasher + Default> BuildHasher for BuildDefaultHasher<H> {
     fn build_hasher(&self) -> Self::Hasher {
         H::default()
     }
+}
+
+enum Sort {
+    Ascending,
+    Descending,
 }
 
 /// Split the input stream into tokens at the given delimiter.
@@ -129,7 +135,7 @@ where
 
 /// Remove duplicates from stdin and print to stdout, counting
 /// the number of occurrences.
-fn count_cmd(delim: u8) -> Result<()> {
+fn count_cmd(delim: u8, sort: Option<Sort>) -> Result<()> {
     let mut set = HashMap::<Vec<u8>, u64>::new();
     for line in stdin().lock().split(delim) {
         match set.entry(line?) {
@@ -142,9 +148,36 @@ fn count_cmd(delim: u8) -> Result<()> {
         }
     }
 
+    if let Some(sort) = sort {
+        sort_and_print(delim, sort, &set)
+    } else {
+        print_out(delim, set.iter().map(|(k, v)| (k.as_slice(), *v)))
+    }
+}
+
+type DataAndCount<'a> = (&'a [u8], u64);
+
+/// Sorts the lines by occurence, then prints them
+// TODO: this could be done more efficiently by reusing the memory of the HashMap
+fn sort_and_print(delim: u8, sort: Sort, set: &HashMap<Vec<u8>, u64>) -> Result<()> {
+    let mut seq: Vec<DataAndCount> = set.iter().map(|(k, v)| (k.as_slice(), *v)).collect();
+
+    let comparator: fn(&DataAndCount, &DataAndCount) -> Ordering = match sort {
+        Sort::Ascending => |a, b| a.1.cmp(&b.1),
+        Sort::Descending => |a, b| b.1.cmp(&a.1),
+    };
+    seq.as_mut_slice().sort_by(comparator);
+    print_out(delim, seq)
+}
+
+/// Prints the sequence of counts and data items, separated by delim
+fn print_out<'a, I>(delim: u8, data: I) -> Result<()>
+where
+    I: IntoIterator<Item = DataAndCount<'a>>,
+{
     let out = stdout();
     let mut out = out.lock();
-    for (line, count) in set.iter() {
+    for (line, count) in data {
         write!(out, "{} ", count)?;
         out.write(&line)?;
         out.write(slice::from_ref(&delim))?;
@@ -188,6 +221,18 @@ fn try_main() -> Result<()> {
                 .short("c"),
         )
         .arg(
+            Arg::with_name("sort")
+                .help("Sort output by the number of occurences, in ascending order")
+                .long("sort")
+                .short("s"),
+        )
+        .arg(
+            Arg::with_name("sort-descending")
+                .help("Order output by the number of occurences, in descending order")
+                .long("sort-descending")
+                .short("S"),
+        )
+        .arg(
             Arg::with_name("delimiter")
                 .help("Which delimiter between elements to use. By default `\n` is used")
                 .long("delimiter")
@@ -222,8 +267,15 @@ Use sed to turn your delimiter into zero bytes?
         false => args.value_of("delimiter").unwrap().as_bytes()[0],
     };
 
-    match args.is_present("count") {
-        true => count_cmd(delim),
+    let sort = match (args.is_present("sort"), args.is_present("sort-descending")) {
+        (true, true) => return Err(anyhow!("cannot specify both --sort and --sort-descending")),
+        (true, false) => Some(Sort::Ascending),
+        (false, true) => Some(Sort::Descending),
+        (false, false) => None,
+    };
+
+    match args.is_present("count") || sort.is_some() {
+        true => count_cmd(delim, sort),
         false => uniq_cmd(delim),
     }
 }
