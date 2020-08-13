@@ -22,3 +22,6 @@ bindgen = "^0.52.0"
 cc = { version = "^1.0.48", features = ["parallel"] }
 anyhow = "^1.0.26"
 shell-words = "^0.1.0"
+
+[dev-dependencies]
+assert_cmd = "1.0.1"
