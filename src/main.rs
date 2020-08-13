@@ -211,7 +211,7 @@ fn uniq_cmd(delim: u8) -> Result<()> {
 
 fn try_main() -> Result<()> {
     let mut argspec = App::new("huniq")
-        .version("2.1.0")
+        .version(env!("CARGO_PKG_VERSION"))
         .about("Remove duplicates from stdin, using a hash table")
         .author("Karolin Varner <karo@cupdev.net)")
         .arg(
