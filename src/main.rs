@@ -4,9 +4,10 @@ use bstr::{io::BufReadExt, ByteSlice};
 use clap::{App, Arg};
 use std::cmp::Ordering;
 use std::collections::{hash_map, HashMap, HashSet};
+use std::hash::BuildHasherDefault;
 use std::hash::{BuildHasher, Hasher};
 use std::io::{stdin, stdout, BufRead, Write};
-use std::{default::Default, marker::PhantomData, slice};
+use std::{default::Default, slice};
 
 /// A no-operation hasher. Used as part of the uniq implementation,
 /// because in there we manually hash the data and just store the
@@ -26,18 +27,6 @@ impl Hasher for IdentityHasher {
 
     fn finish(&self) -> u64 {
         u64::from_ne_bytes(self.buf)
-    }
-}
-
-/// BuildHasher for any Hasher that implements Default
-#[derive(Default)]
-struct BuildDefaultHasher<H: Hasher + Default>(PhantomData<H>);
-
-impl<H: Hasher + Default> BuildHasher for BuildDefaultHasher<H> {
-    type Hasher = H;
-
-    fn build_hasher(&self) -> Self::Hasher {
-        H::default()
     }
 }
 
@@ -113,7 +102,7 @@ fn uniq_cmd(delim: u8, include_trailing: bool) -> Result<()> {
     let inp = stdin();
     let hasher = ARandomState::new();
     let mut out = out.lock();
-    let mut set = HashSet::<u64, BuildDefaultHasher<IdentityHasher>>::default();
+    let mut set = HashSet::<u64, BuildHasherDefault<IdentityHasher>>::default();
 
     inp.lock().for_byte_record_with_terminator(delim, |line| {
         let tok = trim_end(line, delim);
