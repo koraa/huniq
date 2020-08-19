@@ -11,9 +11,9 @@ categories = ["command-line-utilities"]
 keywords = ["cli", "uniq"]
 
 [dependencies]
-clap = "^2.33.0"
-anyhow = "^1.0.26"
-sysconf = "^0.3.4"
+clap = "2.33.3"
+anyhow = "1.0.32"
+sysconf = "0.3.4"
 memchr = "2.3.3"
 ahash = "0.4.4"
 
