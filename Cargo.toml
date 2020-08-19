@@ -14,14 +14,8 @@ keywords = ["cli", "uniq"]
 clap = "^2.33.0"
 anyhow = "^1.0.26"
 sysconf = "^0.3.4"
-getrandom = "^0.1.14"
 memchr = "2.3.3"
-
-[build-dependencies]
-bindgen = "^0.52.0"
-cc = { version = "^1.0.48", features = ["parallel"] }
-anyhow = "^1.0.26"
-shell-words = "^0.1.0"
+ahash = "0.4.4"
 
 [dev-dependencies]
 assert_cmd = "1.0.1"

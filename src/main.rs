@@ -1,10 +1,6 @@
-mod xxhash;
-mod xxhash_bindings;
-
-use crate::xxhash::xxh3_u64_secret;
+use ahash::RandomState as ARandomState;
 use anyhow::{anyhow, Result};
 use clap::{App, Arg};
-use getrandom::getrandom;
 use memchr::memchr_iter;
 use std::cmp::Ordering;
 use std::collections::{hash_map, HashMap, HashSet};
@@ -44,6 +40,13 @@ impl<H: Hasher + Default> BuildHasher for BuildDefaultHasher<H> {
     fn build_hasher(&self) -> Self::Hasher {
         H::default()
     }
+}
+
+/// Hash the given value with the given BuildHasher. Now.
+fn hash<T: BuildHasher, U: std::hash::Hash + ?Sized>(build: &T, v: &U) -> u64 {
+    let mut s = build.build_hasher();
+    v.hash(&mut s);
+    s.finish()
 }
 
 enum Sort {
@@ -136,7 +139,7 @@ where
 /// Remove duplicates from stdin and print to stdout, counting
 /// the number of occurrences.
 fn count_cmd(delim: u8, sort: Option<Sort>) -> Result<()> {
-    let mut set = HashMap::<Vec<u8>, u64>::new();
+    let mut set = HashMap::<Vec<u8>, u64, ARandomState>::default();
     for line in stdin().lock().split(delim) {
         match set.entry(line?) {
             hash_map::Entry::Occupied(mut e) => {
@@ -159,7 +162,7 @@ type DataAndCount<'a> = (&'a [u8], u64);
 
 /// Sorts the lines by occurence, then prints them
 // TODO: this could be done more efficiently by reusing the memory of the HashMap
-fn sort_and_print(delim: u8, sort: Sort, set: &HashMap<Vec<u8>, u64>) -> Result<()> {
+fn sort_and_print(delim: u8, sort: Sort, set: &HashMap<Vec<u8>, u64, ARandomState>) -> Result<()> {
     let mut seq: Vec<DataAndCount> = set.iter().map(|(k, v)| (k.as_slice(), *v)).collect();
 
     let comparator: fn(&DataAndCount, &DataAndCount) -> Ordering = match sort {
@@ -191,16 +194,13 @@ fn uniq_cmd(delim: u8) -> Result<()> {
     // Line processing/output ///////////////////////
     let out = stdout();
     let inp = stdin();
+    let hasher = ARandomState::new();
     let mut out = out.lock();
     let mut set = HashSet::<u64, BuildDefaultHasher<IdentityHasher>>::default();
 
-    // Mitigate hash collision attacks by using a random seed
-    let mut secret = [0u8; 32];
-    getrandom(&mut secret)?;
-
     split_read_zerocopy(delim, &mut inp.lock(), |line| {
         let tok: &[u8] = &line[..line.len() - 1];
-        if set.insert(xxh3_u64_secret(&tok, &secret)) {
+        if set.insert(hash(&hasher, &tok)) {
             out.write(&line)?;
         }
         Ok(())
