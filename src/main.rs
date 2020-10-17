@@ -1,13 +1,12 @@
 use ahash::RandomState as ARandomState;
 use anyhow::{anyhow, Result};
+use bstr::{io::BufReadExt, ByteSlice};
 use clap::{App, Arg};
-use memchr::memchr_iter;
 use std::cmp::Ordering;
 use std::collections::{hash_map, HashMap, HashSet};
 use std::hash::{BuildHasher, Hasher};
-use std::io::{stdin, stdout, BufRead, ErrorKind, Read, Write};
+use std::io::{stdin, stdout, BufRead, Write};
 use std::{default::Default, marker::PhantomData, slice};
-use sysconf::page::pagesize;
 
 /// A no-operation hasher. Used as part of the uniq implementation,
 /// because in there we manually hash the data and just store the
@@ -52,88 +51,6 @@ fn hash<T: BuildHasher, U: std::hash::Hash + ?Sized>(build: &T, v: &U) -> u64 {
 enum Sort {
     Ascending,
     Descending,
-}
-
-/// Split the input stream into tokens at the given delimiter.
-///
-/// This is an alternative to BufRead::split or BufRead::read_until
-/// that does not allocate or copy the tokens around much in memory
-/// usually.
-///
-/// (Maintains an internal buffer that will be reallocated if a token larger
-/// than the buffer is encountered and when there is a token at the end of
-/// the buffer, it will be moved to the start before refilling the buffer,
-/// but in the normal case, no allocation or copy will occur to read a token).
-///
-/// The tokens found will be passed to the given callback. The tokens will
-/// always be terminated by the delimiter at the end. Even if the last token
-/// is delimited by eof and not the delimiter, a delimiter will be supplied.
-fn split_read_zerocopy<R, F>(delim: u8, inp: &mut R, mut handle_line: F) -> Result<()>
-where
-    R: Read,
-    F: FnMut(&[u8]) -> Result<()>,
-{
-    // Initialize the buffer
-    let mut buf = vec![0u8; pagesize() * 2]; // buf.capacity() == buf.len() == pagesize() * 2
-
-    // Amount of data actually in the buffer (manually managed so we
-    // can avoid reinitializing all the data when we resize)
-    let mut used: usize = 0;
-
-    loop {
-        match inp.read(&mut buf[used..] /* unused space */) {
-            Err(ref e) if e.kind() == ErrorKind::Interrupted =>
-            // EINTR – thrown when a process receives a signal…
-            {
-                continue
-            }
-            Err(e) => return Err(anyhow::Error::from(e)),
-            Ok(0) => {
-                // EOF; we potentially need to process the last word here
-                // if the input is missing a newline (or rather delim) at
-                // the end of it's input
-                if used != 0 {
-                    // Grow the buffer if this is necessary to insert the delimiter
-                    if used == buf.len() {
-                        buf.push(delim);
-                    } else {
-                        buf[used] = delim;
-                    }
-                    used += 1;
-
-                    handle_line(&buf[..used])?;
-                }
-
-                break;
-            }
-            Ok(len) =>
-            // Register the data that became available
-            {
-                used += len
-            }
-        };
-
-        // Scan the buffer for lines
-        let mut line_start: usize = 0;
-        for off in memchr_iter(delim, &buf[..used]) {
-            handle_line(&buf[line_start..off + 1])?;
-            line_start = off + 1;
-        }
-
-        // Move the current line fragment to the start of the buffer
-        // so we can fill the rest
-        buf.copy_within(line_start.., 0);
-        used = used - line_start; // Length of the rest
-
-        // Grow the buffer if necessary, letting Vec decide what growth
-        // factor to use
-        if used == buf.len() {
-            buf.resize(buf.len() + 1, 0);
-            buf.resize(buf.capacity(), 0);
-        }
-    }
-
-    Ok(())
 }
 
 /// Remove duplicates from stdin and print to stdout, counting
@@ -190,7 +107,7 @@ where
 }
 
 /// Remove duplicates from stdin and print to stdout.
-fn uniq_cmd(delim: u8) -> Result<()> {
+fn uniq_cmd(delim: u8, include_trailing: bool) -> Result<()> {
     // Line processing/output ///////////////////////
     let out = stdout();
     let inp = stdin();
@@ -198,15 +115,26 @@ fn uniq_cmd(delim: u8) -> Result<()> {
     let mut out = out.lock();
     let mut set = HashSet::<u64, BuildDefaultHasher<IdentityHasher>>::default();
 
-    split_read_zerocopy(delim, &mut inp.lock(), |line| {
-        let tok: &[u8] = &line[..line.len() - 1];
+    inp.lock().for_byte_record_with_terminator(delim, |line| {
+        let tok = trim_end(line, delim);
         if set.insert(hash(&hasher, &tok)) {
-            out.write(&line)?;
+            out.write_all(&line)?;
+
+            if include_trailing && tok.len() == line.len() {
+                out.write_all(&[delim])?;
+            }
         }
-        Ok(())
+        Ok(true)
     })?;
 
     Ok(())
+}
+
+fn trim_end(mut record: &[u8], delim: u8) -> &[u8] {
+    if record.last_byte() == Some(delim) {
+        record = &record[..record.len() - 1];
+    }
+    record
 }
 
 fn try_main() -> Result<()> {
@@ -258,6 +186,12 @@ Use sed to turn your delimiter into zero bytes?
                 .long("null")
                 .short("0")
                 .conflicts_with("delimiter"),
+        )
+        .arg(
+            Arg::with_name("no-trailing-delimiter")
+                .help("Prevent adding a delimiter to the last record if missing")
+                .long("no-trailing-delimiter")
+                .short("t"),
         );
 
     let args = argspec.get_matches_from_safe_borrow(&mut std::env::args_os())?;
@@ -276,7 +210,7 @@ Use sed to turn your delimiter into zero bytes?
 
     match args.is_present("count") || sort.is_some() {
         true => count_cmd(delim, sort),
-        false => uniq_cmd(delim),
+        false => uniq_cmd(delim, !args.is_present("no-trailing-delimiter")),
     }
 }
 

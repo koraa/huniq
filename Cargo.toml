@@ -13,9 +13,8 @@ keywords = ["cli", "uniq"]
 [dependencies]
 clap = "2.33.3"
 anyhow = "1.0.32"
-sysconf = "0.3.4"
-memchr = "2.3.3"
 ahash = "0.4.4"
+bstr = "0.2.13"
 
 [dev-dependencies]
 assert_cmd = "1.0.1"
