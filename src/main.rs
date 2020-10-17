@@ -99,8 +99,8 @@ where
     let mut out = out.lock();
     for (line, count) in data {
         write!(out, "{} ", count)?;
-        out.write(&line)?;
-        out.write(slice::from_ref(&delim))?;
+        out.write_all(&line)?;
+        out.write_all(slice::from_ref(&delim))?;
     }
 
     Ok(())
