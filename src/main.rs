@@ -7,6 +7,7 @@ use std::collections::{hash_map, HashMap, HashSet};
 use std::hash::BuildHasherDefault;
 use std::hash::{BuildHasher, Hasher};
 use std::io::{stdin, stdout, BufRead, Write};
+use std::mem;
 use std::{default::Default, slice};
 
 /// A no-operation hasher. Used as part of the uniq implementation,
@@ -57,11 +58,15 @@ fn count_cmd(delim: u8, sort: Option<Sort>) -> Result<()> {
         }
     }
 
-    if let Some(sort) = sort {
+    let result = if let Some(sort) = sort {
         sort_and_print(delim, sort, &set)
     } else {
         print_out(delim, set.iter().map(|(k, v)| (k.as_slice(), *v)))
-    }
+    };
+
+    mem::forget(set); // app can now exit, so we don't need to wait for this memory to be freed piecemeal
+
+    result
 }
 
 type DataAndCount<'a> = (&'a [u8], u64);
@@ -115,6 +120,8 @@ fn uniq_cmd(delim: u8, include_trailing: bool) -> Result<()> {
         }
         Ok(true)
     })?;
+
+    mem::forget(set); // app can now exit, so we don't need to wait for this memory to be freed piecemeal
 
     Ok(())
 }
