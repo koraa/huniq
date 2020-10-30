@@ -18,3 +18,6 @@ bstr = "0.2.14"
 
 [dev-dependencies]
 assert_cmd = "1.0.1"
+
+[profile.release]
+lto = "fat"
