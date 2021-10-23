@@ -16,8 +16,8 @@ baz
 
 $ echo -e "foo\nbar\nfoo\nbaz" | huniq -c
 1 baz
-1 bar
 2 foo
+1 bar
 ```
 
 `huniq` replaces `sort | uniq` (or `sort -u` with gnu sort) and `huniq -c` replaces `sort | uniq -c`, assuming the data is sorted just so it can be passed to `uniq`. If having sorted output is desired, `sort | uniq` should still be used.
