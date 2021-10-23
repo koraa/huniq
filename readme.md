@@ -20,10 +20,9 @@ $ echo -e "foo\nbar\nfoo\nbaz" | huniq -c
 2 foo
 ```
 
-`huniq` replaces `sort | uniq` (or `sort -u` with gnu sort) and `huniq -c` replaces `sort | uniq -c`.
+`huniq` replaces `sort | uniq` (or `sort -u` with gnu sort) and `huniq -c` replaces `sort | uniq -c`, assuming the data is sorted just so it can be passed to `uniq`. If having sorted output is desired, `sort | uniq` should still be used.
 
-The order of the output is stable when in normal mode, but it is not stable when
-in -c/count mode.
+The order of the output is stable when in normal mode, but it is not stable when in -c/count mode.
 
 ## Installation
 
