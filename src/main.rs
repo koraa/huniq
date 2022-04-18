@@ -1,7 +1,7 @@
 use ahash::RandomState as ARandomState;
 use anyhow::{anyhow, Result};
 use bstr::{io::BufReadExt, ByteSlice};
-use clap::{App, Arg};
+use clap::{Arg, Command};
 use std::cmp::Ordering;
 use std::collections::{hash_map, HashMap, HashSet};
 use std::hash::BuildHasherDefault;
@@ -134,34 +134,34 @@ fn trim_end(mut record: &[u8], delim: u8) -> &[u8] {
 }
 
 fn try_main() -> Result<()> {
-    let mut argspec = App::new("huniq")
+    let mut argspec = Command::new("huniq")
         .version(env!("CARGO_PKG_VERSION"))
         .about("Remove duplicates from stdin, using a hash table")
         .author("Karolin Varner <karo@cupdev.net)")
         .arg(
-            Arg::with_name("count")
+            Arg::new("count")
                 .help("Output the amount of times a line was encountered")
                 .long("count")
-                .short("c"),
+                .short('c'),
         )
         .arg(
-            Arg::with_name("sort")
+            Arg::new("sort")
                 .help("Sort output by the number of occurences, in ascending order")
                 .long("sort")
-                .short("s"),
+                .short('s'),
         )
         .arg(
-            Arg::with_name("sort-descending")
+            Arg::new("sort-descending")
                 .help("Order output by the number of occurences, in descending order")
                 .long("sort-descending")
-                .short("S"),
+                .short('S'),
         )
         .arg(
-            Arg::with_name("delimiter")
+            Arg::new("delimiter")
                 .help("Which delimiter between elements to use. By default `\n` is used")
                 .long("delimiter")
                 .long("delim")
-                .short("d")
+                .short('d')
                 .takes_value(true)
                 .default_value("\n")
                 .validator(|v| match v.len() {
@@ -177,20 +177,20 @@ Use sed to turn your delimiter into zero bytes?
                 }),
         )
         .arg(
-            Arg::with_name("null")
+            Arg::new("null")
                 .help("Use the \\0 character as the record delimiter.")
                 .long("null")
-                .short("0")
+                .short('0')
                 .conflicts_with("delimiter"),
         )
         .arg(
-            Arg::with_name("no-trailing-delimiter")
+            Arg::new("no-trailing-delimiter")
                 .help("Prevent adding a delimiter to the last record if missing")
                 .long("no-trailing-delimiter")
-                .short("t"),
+                .short('t'),
         );
 
-    let args = argspec.get_matches_from_safe_borrow(&mut std::env::args_os())?;
+    let args = argspec.try_get_matches_from_mut(&mut std::env::args_os())?;
 
     let delim = match args.is_present("null") {
         true => b'\0',
