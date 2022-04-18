@@ -93,7 +93,7 @@ where
     let mut out = out.lock();
     for (line, count) in data {
         write!(out, "{} ", count)?;
-        out.write_all(&line)?;
+        out.write_all(line)?;
         out.write_all(slice::from_ref(&delim))?;
     }
 
@@ -112,7 +112,7 @@ fn uniq_cmd(delim: u8, include_trailing: bool) -> Result<()> {
     inp.lock().for_byte_record_with_terminator(delim, |line| {
         let tok = trim_end(line, delim);
         if set.insert(hash(&hasher, &tok)) {
-            out.write_all(&line)?;
+            out.write_all(line)?;
 
             if include_trailing && tok.len() == line.len() {
                 out.write_all(&[delim])?;
