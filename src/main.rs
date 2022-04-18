@@ -134,7 +134,7 @@ fn trim_end(mut record: &[u8], delim: u8) -> &[u8] {
 }
 
 fn try_main() -> Result<()> {
-    let mut argspec = Command::new("huniq")
+    let argspec = Command::new("huniq")
         .version(env!("CARGO_PKG_VERSION"))
         .about("Remove duplicates from stdin, using a hash table")
         .author("Karolin Varner <karo@cupdev.net)")
@@ -190,7 +190,7 @@ Use sed to turn your delimiter into zero bytes?
                 .short('t'),
         );
 
-    let args = argspec.try_get_matches_from_mut(&mut std::env::args_os())?;
+    let args = argspec.get_matches();
 
     let delim = match args.is_present("null") {
         true => b'\0',
