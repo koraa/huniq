@@ -11,13 +11,13 @@ categories = ["command-line-utilities"]
 keywords = ["cli", "uniq"]
 
 [dependencies]
-clap = "2.33.3"
-anyhow = "1.0.33"
-ahash = "0.5.6"
-bstr = "0.2.14"
+clap = "3.1.9"
+anyhow = "1.0.56"
+ahash = "0.7.6"
+bstr = "0.2.17"
 
 [dev-dependencies]
-assert_cmd = "1.0.1"
+assert_cmd = "2.0.4"
 
 [profile.release]
 lto = "fat"
