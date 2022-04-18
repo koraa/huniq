@@ -17,12 +17,16 @@ fn unique_lines() {
 
 #[test]
 fn count_sort() {
-    assert("a\na\nb\n", &["-c", "-s"]).success().stdout("1 b\n2 a\n");
+    assert("a\na\nb\n", &["-c", "-s"])
+        .success()
+        .stdout("1 b\n2 a\n");
 }
 
 #[test]
 fn count_sort_descending() {
-    assert("a\na\nb\n", &["-c", "-S"]).success().stdout("2 a\n1 b\n");
+    assert("a\na\nb\n", &["-c", "-S"])
+        .success()
+        .stdout("2 a\n1 b\n");
 }
 
 fn assert(input: &str, args: &[&str]) -> Assert {
