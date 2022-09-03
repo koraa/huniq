@@ -2,7 +2,7 @@
 name = "huniq"
 version = "2.7.0"
 authors = ["Karolin Varner <karo@cupdev.net>"]
-edition = "2018"
+edition = "2021"
 license = "BSD-3-Clause"
 description = "Filter out duplicates on the command line. Replacement for `sort | uniq` optimized for speed (10x faster)."
 readme = "readme.md"
@@ -11,7 +11,7 @@ categories = ["command-line-utilities"]
 keywords = ["cli", "uniq"]
 
 [dependencies]
-clap = "3.1.9"
+clap = {version = "3.1.9", features = ["derive"]}
 anyhow = "1.0.56"
 ahash = "0.7.6"
 bstr = "0.2.17"

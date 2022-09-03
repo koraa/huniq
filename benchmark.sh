@@ -1,4 +1,4 @@
-#! /usr/bin/env bash
+#!/usr/bin/env bash
 
 set -e
 trap "exit" SIGINT SIGTERM # exit from loop
