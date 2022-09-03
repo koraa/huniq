@@ -1,7 +1,8 @@
-#! /bin/bash
+#!/usr/bin/env bash
 
 cd "$(dirname "$0")"
 bin="./target/debug/huniq"
+test -e "$bin" || bin=$(which huniq)
 
 failures=0
 count=0
@@ -19,7 +20,7 @@ assert() {
 }
 
 main() {
-  test -e "$huniq2bin" || {
+  test ! -e "$bin" && which cargo >/dev/null 2>&1 && {
     cargo build
   }
 
