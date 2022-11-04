@@ -17,6 +17,8 @@ jobs:
         with:
           command: build
           args: --release
+      - name: Rename file 
+        run: mv target/release/huniq target/release/huniq_x86-64
       - uses: "marvinpinto/action-automatic-releases@latest"
         with:
           repo_token: "${{ secrets.GITHUB_TOKEN }}"
@@ -24,4 +26,4 @@ jobs:
           prerelease: true
           title: "Development Build"
           files: |
-            target/release/huniq
+            target/release/huniq_x86-64
