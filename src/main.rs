@@ -45,7 +45,7 @@ enum Sort {
 
 /// Remove duplicates from stdin and print to stdout, counting
 /// the number of occurrences.
-fn count_cmd(delim: u8, sort: Option<Sort>) -> Result<()> {
+fn count_cmd(delim: u8, pad: bool, sort: Option<Sort>) -> Result<()> {
     let mut set = HashMap::<Vec<u8>, u64, ARandomState>::default();
     for line in stdin().lock().split(delim) {
         match set.entry(line?) {
@@ -59,9 +59,9 @@ fn count_cmd(delim: u8, sort: Option<Sort>) -> Result<()> {
     }
 
     let result = if let Some(sort) = sort {
-        sort_and_print(delim, sort, &set)
+        sort_and_print(delim, pad, sort, &set)
     } else {
-        print_out(delim, set.iter().map(|(k, v)| (k.as_slice(), *v)))
+        print_out(delim, pad, set.iter().map(|(k, v)| (k.as_slice(), *v)))
     };
 
     mem::forget(set); // app can now exit, so we don't need to wait for this memory to be freed piecemeal
@@ -73,7 +73,12 @@ type DataAndCount<'a> = (&'a [u8], u64);
 
 /// Sorts the lines by occurence, then prints them
 // TODO: this could be done more efficiently by reusing the memory of the HashMap
-fn sort_and_print(delim: u8, sort: Sort, set: &HashMap<Vec<u8>, u64, ARandomState>) -> Result<()> {
+fn sort_and_print(
+    delim: u8,
+    pad: bool,
+    sort: Sort,
+    set: &HashMap<Vec<u8>, u64, ARandomState>,
+) -> Result<()> {
     let mut seq: Vec<DataAndCount> = set.iter().map(|(k, v)| (k.as_slice(), *v)).collect();
 
     let comparator: fn(&DataAndCount, &DataAndCount) -> Ordering = match sort {
@@ -81,18 +86,22 @@ fn sort_and_print(delim: u8, sort: Sort, set: &HashMap<Vec<u8>, u64, ARandomStat
         Sort::Descending => |a, b| b.1.cmp(&a.1),
     };
     seq.as_mut_slice().sort_by(comparator);
-    print_out(delim, seq)
+    print_out(delim, pad, seq)
 }
 
 /// Prints the sequence of counts and data items, separated by delim
-fn print_out<'a, I>(delim: u8, data: I) -> Result<()>
+fn print_out<'a, I>(delim: u8, pad: bool, data: I) -> Result<()>
 where
     I: IntoIterator<Item = DataAndCount<'a>>,
 {
     let out = stdout();
     let mut out = out.lock();
     for (line, count) in data {
-        write!(out, "{} ", count)?;
+        if pad {
+            write!(out, "{:>7} ", count)?;
+        } else {
+            write!(out, "{} ", count)?;
+        }
         out.write_all(line)?;
         out.write_all(slice::from_ref(&delim))?;
     }
@@ -188,6 +197,12 @@ Use sed to turn your delimiter into zero bytes?
                 .help("Prevent adding a delimiter to the last record if missing")
                 .long("no-trailing-delimiter")
                 .short('t'),
+        )
+        .arg(
+            Arg::new("compat")
+                .help("Pad line counts with leading spaces, like uniq -c from coreutils")
+                .long("compat")
+                .short('C'),
         );
 
     let args = argspec.get_matches();
@@ -197,6 +212,8 @@ Use sed to turn your delimiter into zero bytes?
         false => args.value_of("delimiter").unwrap().as_bytes()[0],
     };
 
+    let pad = args.is_present("compat");
+
     let sort = match (args.is_present("sort"), args.is_present("sort-descending")) {
         (true, true) => return Err(anyhow!("cannot specify both --sort and --sort-descending")),
         (true, false) => Some(Sort::Ascending),
@@ -205,7 +222,7 @@ Use sed to turn your delimiter into zero bytes?
     };
 
     match args.is_present("count") || sort.is_some() {
-        true => count_cmd(delim, sort),
+        true => count_cmd(delim, pad, sort),
         false => uniq_cmd(delim, !args.is_present("no-trailing-delimiter")),
     }
 }

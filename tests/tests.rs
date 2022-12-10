@@ -23,10 +23,27 @@ fn count_sort() {
 }
 
 #[test]
+fn count_sort_compat() {
+    assert(
+        "a\na\nb\na\na\na\na\na\na\na\na\na\na\n",
+        &["-c", "-s", "-C"],
+    )
+    .success()
+    .stdout("      1 b\n     12 a\n");
+}
+
+#[test]
 fn count_sort_descending() {
     assert("a\na\nb\n", &["-c", "-S"])
         .success()
         .stdout("2 a\n1 b\n");
+}
+
+#[test]
+fn count_sort_descending_compat() {
+    assert("a\na\nb\n", &["-c", "-S", "-C"])
+        .success()
+        .stdout("      2 a\n      1 b\n");
 }
 
 fn assert(input: &str, args: &[&str]) -> Assert {
