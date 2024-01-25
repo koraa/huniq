@@ -126,11 +126,11 @@ fn uniq_cmd(delim: u8, include_trailing: bool) -> Result<()> {
     Ok(())
 }
 
-fn trim_end(mut record: &[u8], delim: u8) -> &[u8] {
-    if record.last_byte() == Some(delim) {
-        record = &record[..record.len() - 1];
+fn trim_end(record: &[u8], delim: u8) -> &[u8] {
+    match record.last_byte() {
+        Some(b) if b == delim => &record[..record.len() - 1],
+        _ => record,
     }
-    record
 }
 
 fn try_main() -> Result<()> {
