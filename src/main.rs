@@ -1,14 +1,14 @@
-use ahash::RandomState as ARandomState;
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use bstr::{io::BufReadExt, ByteSlice};
-use clap::{Arg, Command};
+use clap::Parser;
 use std::cmp::Ordering;
 use std::collections::{hash_map, HashMap, HashSet};
-use std::hash::BuildHasherDefault;
-use std::hash::{BuildHasher, Hasher};
+use std::hash::{BuildHasher, BuildHasherDefault, Hasher};
 use std::io::{stdin, stdout, BufRead, Write};
 use std::mem;
 use std::{default::Default, slice};
+
+mod uniq_iter;
 
 /// A no-operation hasher. Used as part of the uniq implementation,
 /// because in there we manually hash the data and just store the
@@ -46,7 +46,7 @@ enum Sort {
 /// Remove duplicates from stdin and print to stdout, counting
 /// the number of occurrences.
 fn count_cmd(delim: u8, sort: Option<Sort>) -> Result<()> {
-    let mut set = HashMap::<Vec<u8>, u64, ARandomState>::default();
+    let mut set = HashMap::<Vec<u8>, u64, ahash::RandomState>::default();
     for line in stdin().lock().split(delim) {
         match set.entry(line?) {
             hash_map::Entry::Occupied(mut e) => {
@@ -58,22 +58,24 @@ fn count_cmd(delim: u8, sort: Option<Sort>) -> Result<()> {
         }
     }
 
-    let result = if let Some(sort) = sort {
+    if let Some(sort) = sort {
         sort_and_print(delim, sort, &set)
     } else {
         print_out(delim, set.iter().map(|(k, v)| (k.as_slice(), *v)))
-    };
+    }?;
 
-    mem::forget(set); // app can now exit, so we don't need to wait for this memory to be freed piecemeal
-
-    result
+    std::process::exit(0);
 }
 
 type DataAndCount<'a> = (&'a [u8], u64);
 
 /// Sorts the lines by occurence, then prints them
 // TODO: this could be done more efficiently by reusing the memory of the HashMap
-fn sort_and_print(delim: u8, sort: Sort, set: &HashMap<Vec<u8>, u64, ARandomState>) -> Result<()> {
+fn sort_and_print(
+    delim: u8,
+    sort: Sort,
+    set: &HashMap<Vec<u8>, u64, ahash::RandomState>,
+) -> Result<()> {
     let mut seq: Vec<DataAndCount> = set.iter().map(|(k, v)| (k.as_slice(), *v)).collect();
 
     let comparator: fn(&DataAndCount, &DataAndCount) -> Ordering = match sort {
@@ -105,7 +107,7 @@ fn uniq_cmd(delim: u8, include_trailing: bool) -> Result<()> {
     // Line processing/output ///////////////////////
     let out = stdout();
     let inp = stdin();
-    let hasher = ARandomState::new();
+    let hasher = ahash::RandomState::new();
     let mut out = out.lock();
     let mut set = HashSet::<u64, BuildHasherDefault<IdentityHasher>>::default();
 
@@ -133,85 +135,64 @@ fn trim_end(record: &[u8], delim: u8) -> &[u8] {
     }
 }
 
-fn try_main() -> Result<()> {
-    let argspec = Command::new("huniq")
-        .version(env!("CARGO_PKG_VERSION"))
-        .about("Remove duplicates from stdin, using a hash table")
-        .author("Karolin Varner <karo@cupdev.net)")
-        .arg(
-            Arg::new("count")
-                .help("Output the amount of times a line was encountered")
-                .long("count")
-                .short('c'),
-        )
-        .arg(
-            Arg::new("sort")
-                .help("Sort output by the number of occurences, in ascending order")
-                .long("sort")
-                .short('s'),
-        )
-        .arg(
-            Arg::new("sort-descending")
-                .help("Order output by the number of occurences, in descending order")
-                .long("sort-descending")
-                .short('S'),
-        )
-        .arg(
-            Arg::new("delimiter")
-                .help("Which delimiter between elements to use. By default `\n` is used")
-                .long("delimiter")
-                .long("delim")
-                .short('d')
-                .takes_value(true)
-                .default_value("\n")
-                .validator(|v| match v.len() {
-                    1 => Ok(()),
-                    _ => Err(String::from(
-                        "\
-Only ascii characters are supported as delimiters. \
-Use sed to turn your delimiter into zero bytes?
+/// Remove duplicates from stdin, using a hash table
+#[derive(clap::Parser, Debug)]
+#[clap(author, version, about, long_about = None)]
+struct Args {
+    /// Output the amount of times a line was encountered
+    #[clap(short, long)]
+    count: bool,
 
-    $ echo -n \"1λ1λ2λ3\" | sed 's@λ@\x00@g' | huniq -0 | sed 's@\x00@λ@g'
-    1λ2λ3λ",
-                    )),
-                }),
-        )
-        .arg(
-            Arg::new("null")
-                .help("Use the \\0 character as the record delimiter.")
-                .long("null")
-                .short('0')
-                .conflicts_with("delimiter"),
-        )
-        .arg(
-            Arg::new("no-trailing-delimiter")
-                .help("Prevent adding a delimiter to the last record if missing")
-                .long("no-trailing-delimiter")
-                .short('t'),
-        );
+    /// Sort output by the number of occurences, in ascending order
+    #[clap(short, long)]
+    sort: bool,
 
-    let args = argspec.get_matches();
+    /// Sort output by the number of occurences, in descending order
+    #[clap(short = 'S', long)]
+    sort_descending: bool,
 
-    let delim = match args.is_present("null") {
-        true => b'\0',
-        false => args.value_of("delimiter").unwrap().as_bytes()[0],
-    };
+    /// Which delimiter between elements to use. By default `\n` is used
+    ///
+    /// Only ascii characters are supported as delimiters.
+    /// Use sed to turn your delimiter into zero bytes?
+    /// $ echo -n "1λ1λ2λ3" | sed 's@λ@\x00@g' | huniq -0 | sed 's@\x00@λ@g'1λ2λ3λ",
+    #[clap(short, long, long = "delimiter", default_value = "\n")]
+    delim: char,
 
-    let sort = match (args.is_present("sort"), args.is_present("sort-descending")) {
+    /// Use the \0 character as the record delimiter.
+    #[clap(short = '0', long)]
+    null: bool,
+
+    /// Prevent adding a delimiter to the last record if missing
+    #[clap(short = 't', long = "no-trailing-delimiter")]
+    no_trailing_delimiter: bool,
+}
+
+fn main() -> Result<()> {
+    let Args {
+        count,
+        sort,
+        sort_descending,
+        mut delim,
+        null,
+        no_trailing_delimiter,
+        ..
+    } = Args::parse();
+
+    if null {
+        delim = '\0';
+    }
+    let delim: u8 = delim.try_into().context("delim is not an ascii char")?;
+
+    let sort = match (sort, sort_descending) {
         (true, true) => return Err(anyhow!("cannot specify both --sort and --sort-descending")),
         (true, false) => Some(Sort::Ascending),
         (false, true) => Some(Sort::Descending),
         (false, false) => None,
     };
 
-    match args.is_present("count") || sort.is_some() {
+    match count || sort.is_some() {
         true => count_cmd(delim, sort),
-        false => uniq_cmd(delim, !args.is_present("no-trailing-delimiter")),
-    }
-}
-
-fn main() {
-    if let Err(er) = try_main() {
-        println!("{}", er);
+        false => uniq_cmd(delim, !no_trailing_delimiter),
     }
 }
